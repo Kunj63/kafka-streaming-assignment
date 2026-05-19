@@ -1,26 +1,15 @@
-"""
-producer.py
-Reads rows from data_sample.csv and publishes each one as a JSON message
-to the raw-data Kafka topic at ~1 row/second.
-
-Usage:
-    python producer.py
-
-Set KAFKA_BOOTSTRAP_SERVERS and (if using Confluent Cloud) auth env vars below.
-"""
-
 import json
 import time
 import os
 import pandas as pd
 from kafka import KafkaProducer
 
-# ── Config ────────────────────────────────────────────────────────────────────
+
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 TOPIC             = "raw-data"
 DELAY_SECONDS     = 1.0          # ~1 row/second for demo
 
-# Confluent Cloud / MSK / Aiven — set these env vars if needed:
+
 SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME", "")
 SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD", "")
 
