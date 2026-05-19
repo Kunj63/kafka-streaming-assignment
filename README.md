@@ -88,7 +88,7 @@ The producer publishes one dataset row per second to the `raw-data` topic. The F
 
 ## Video Demo
 
-https://github.com/yourusername/kafka-streaming
+https://drive.google.com/drive/folders/1WOJwOFhvTbTVPtogT1sgHTM1sRLKbo-s?usp=sharing
 
 ---
 
