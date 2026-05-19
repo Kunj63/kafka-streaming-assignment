@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # -*- coding: utf-8 -*-
 import sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -12,8 +11,6 @@ count (cnt) in number of rentals.
 Run with: python train_model.py
 """
 
-=======
->>>>>>> 261a17ce0c37605a85c3b091963ceb4046e788c8
 import pandas as pd
 import numpy as np
 import joblib
@@ -27,7 +24,6 @@ from sklearn.metrics import (
     f1_score,
 )
 
-<<<<<<< HEAD
 DATA_FILE  = "data/hour.csv"
 MODEL_FILE = "model.joblib"
 
@@ -45,30 +41,6 @@ FEATURE_COLS = [
     "hum",
     "windspeed",
 ]
-=======
-CSV_PATH = "hour.csv"   
-if not os.path.exists(CSV_PATH):
-    print("⚠  hour.csv not found – generating synthetic data for demo purposes.")
-    np.random.seed(42)
-    n = 17379
-    df = pd.DataFrame({
-        "season":   np.random.randint(1, 5, n),
-        "yr":       np.random.randint(0, 2, n),
-        "mnth":     np.random.randint(1, 13, n),
-        "hr":       np.random.randint(0, 24, n),
-        "holiday":  np.random.randint(0, 2, n),
-        "weekday":  np.random.randint(0, 7, n),
-        "workingday": np.random.randint(0, 2, n),
-        "weathersit": np.random.randint(1, 5, n),
-        "temp":     np.random.uniform(0, 1, n).round(2),
-        "atemp":    np.random.uniform(0, 1, n).round(2),
-        "hum":      np.random.uniform(0, 1, n).round(2),
-        "windspeed": np.random.uniform(0, 1, n).round(2),
-        "cnt":      np.random.randint(1, 977, n),
-    })
-else:
-    df = pd.read_csv(CSV_PATH)
->>>>>>> 261a17ce0c37605a85c3b091963ceb4046e788c8
 
 TARGET = "cnt"
 
@@ -93,7 +65,6 @@ def load_and_clean(path: str) -> pd.DataFrame:
     return df
 
 
-<<<<<<< HEAD
 def bin_rentals(y: np.ndarray) -> np.ndarray:
     """
     Map continuous rental counts to 3 demand bands for classification metrics.
@@ -175,8 +146,3 @@ if __name__ == "__main__":
     print("All done. Training complete! You can now run the pipeline.")
     print(f"   RMSE: {rmse:.4f}  |  MAE: {mae:.4f}  |  R²: {r2:.4f}")
     print(f"   Accuracy: {acc*100:.2f}%  |  F1: {f1*100:.2f}%")
-=======
-df[FEATURES + [TARGET]].to_csv("model/data_sample.csv", index=False)
-print("✅ Saved model/bike_model.joblib and model/data_sample.csv")
-print(f"   Accuracy (R²): {r2:.4f}   RMSE: {rmse:.2f}")
->>>>>>> 261a17ce0c37605a85c3b091963ceb4046e788c8
