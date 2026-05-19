@@ -150,7 +150,7 @@ The producer will begin sending one row per second. Predictions will appear in t
 
 ## Video Demo
 
-[Google Drive Video Demo Link]
+[[Google Drive Video Demo Link]](https://drive.google.com/drive/folders/1WOJwOFhvTbTVPtogT1sgHTM1sRLKbo-s?usp=drive_link)
 
 ---
 
