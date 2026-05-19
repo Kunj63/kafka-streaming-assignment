@@ -9,9 +9,9 @@ import ssl
 import faust
 
 # --- Confluent Cloud Credentials ---
-_BROKER     = "pkc-619z3.us-east1.gcp.confluent.cloud:9092"
-_API_KEY    = "E4QILOEEYICJJRRD"
-_API_SECRET = "cfltO47x6FfMqY4gTDoedypgFeFmQC9MK4ipYoMxHXxm4+dRJSVYo+n4QRxoUJeg"
+_BROKER     = "pkc-xxxx.confluent.cloud:9092"
+_API_KEY    = "YOUR_API_KEY"
+_API_SECRET = "YOUR_SECRET"
 
 # Allow overrides via environment variables
 KAFKA_BROKER      = os.getenv("KAFKA_BROKER",      _BROKER)
