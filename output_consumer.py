@@ -1,12 +1,3 @@
-"""
-output_consumer.py
-Reads from the predictions topic and prints each result to the console
-in a human-readable format as it arrives.
-
-Usage:
-    python output_consumer.py
-"""
-
 import json
 import os
 from kafka import KafkaConsumer
