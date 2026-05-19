@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # -*- coding: utf-8 -*-
 """
 producer.py - Kafka Producer
@@ -6,6 +7,8 @@ Reads the Bike Sharing dataset and sends each row to Kafka at ~1 row/sec.
 Run with: python producer.py
 """
 
+=======
+>>>>>>> 261a17ce0c37605a85c3b091963ceb4046e788c8
 import json
 import time
 import numpy as np
@@ -14,6 +17,7 @@ from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from config import DATA_FILE, PRODUCER_DELAY, RAW_TOPIC, get_kafka_config
 
+<<<<<<< HEAD
 FEATURE_COLS = [
     "season",
     "yr",
@@ -29,6 +33,16 @@ FEATURE_COLS = [
     "windspeed",
 ]
 
+=======
+
+BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+TOPIC             = "raw-data"
+DELAY_SECONDS     = 1.0          # ~1 row/second for demo
+
+
+SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME", "")
+SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD", "")
+>>>>>>> 261a17ce0c37605a85c3b091963ceb4046e788c8
 
 def load_data(path: str) -> pd.DataFrame:
     """Load and clean the Bike Sharing dataset."""
