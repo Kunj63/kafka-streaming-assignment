@@ -1,75 +1,110 @@
+# -*- coding: utf-8 -*-
 """
-streams_processor.py
-Faust Streams Processor — consumes raw-data topic, runs ML model,
-publishes predictions to the predictions topic.
+streams_processor.py - Faust Streams Processor
+================================================
+Consumes raw bike sharing events from the 'bike-sharing-raw' topic,
+runs the pre-trained Random Forest Regressor to predict hourly rental count,
+and publishes results to the 'bike-sharing-predictions' topic.
 
 Usage:
     faust -A streams_processor worker -l info
-
-Environment variables (same as producer.py):
-    KAFKA_BOOTSTRAP_SERVERS  (default: localhost:9092)
-    KAFKA_SASL_USERNAME / KAFKA_SASL_PASSWORD  (Confluent Cloud / MSK)
+    (or simply: python streams_processor.py worker -l info)
 """
 
-import faust
+import faust_patch
+faust_patch.apply()
+
+import json
+import warnings
 import joblib
-import os
 import numpy as np
+import pandas as pd
+import faust
+from config import MODEL_FILE, RAW_TOPIC, PREDICTIONS_TOPIC, FAUST_BROKER, get_faust_credentials
 
-# ── Config ────────────────────────────────────────────────────────────────────
-BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-SASL_USERNAME     = os.getenv("KAFKA_SASL_USERNAME", "")
-SASL_PASSWORD     = os.getenv("KAFKA_SASL_PASSWORD", "")
+warnings.filterwarnings("ignore", category=UserWarning)
 
-broker_credentials = None
-if SASL_USERNAME:
-    from faust.types.auth import SASLCredentials
-    broker_credentials = SASLCredentials(
-        username=SASL_USERNAME,
-        password=SASL_PASSWORD,
-        ssl=True,
-    )
+# ── Load model at startup ─────────────────────────────────────────────────────
+print(f"[LOAD] Loading model from: {MODEL_FILE}")
+_payload  = joblib.load(MODEL_FILE)
+MODEL     = _payload["model"]
+FEATURES  = _payload["features"]
+print(f"[OK] Model loaded. Features used: {len(FEATURES)}")
 
+# ── Faust App ─────────────────────────────────────────────────────────────────
 app = faust.App(
-    "bike-streaming-app",
-    broker=f"kafka://{BOOTSTRAP_SERVERS}",
-    broker_credentials=broker_credentials,
+    "bike-sharing-processor",
+    broker=FAUST_BROKER,
+    broker_credentials=get_faust_credentials(),
     value_serializer="json",
+    topic_allow_declare=False,
+    topic_disable_leader=True,
 )
 
-# ── Kafka Topics ──────────────────────────────────────────────────────────────
-raw_topic         = app.topic("raw-data",     value_type=dict)
-predictions_topic = app.topic("predictions",  value_type=dict)
+# ── Topic Definitions ─────────────────────────────────────────────────────────
+raw_topic         = app.topic(RAW_TOPIC,         value_type=bytes)
+predictions_topic = app.topic(PREDICTIONS_TOPIC, value_type=bytes)
 
-# ── Load pre-trained model ────────────────────────────────────────────────────
-MODEL    = joblib.load("model/bike_model.joblib")
-FEATURES = joblib.load("model/features.joblib")
-print(f"✅ Model loaded — features: {FEATURES}")
 
-# ── Faust Agent (the Streams processor) ──────────────────────────────────────
-@app.agent(raw_topic)
-async def process_stream(stream):
+def extract_features(event: dict) -> pd.DataFrame | None:
+    """Extract feature DataFrame (with column names) from raw event dict."""
+    try:
+        row = {}
+        for feat in FEATURES:
+            val = event.get(feat)
+            if val is None or val != val:
+                val = 0.0
+            row[feat] = float(val)
+        return pd.DataFrame([row], columns=FEATURES)
+    except Exception as e:
+        print(f"[WARN] Feature extraction error: {e}")
+        return None
+
+
+# ── Faust Agent (Streams Processor) ──────────────────────────────────────────
+@app.agent(raw_topic, sink=[predictions_topic])
+async def process_bike_sharing(stream):
     """
-    Consumes every message from raw-data, extracts the feature vector,
-    runs the RandomForest model, and sends a prediction message to the
-    predictions topic.
+    Faust agent that:
+    1. Receives raw bike sharing messages from 'bike-sharing-raw'
+    2. Extracts ML features
+    3. Runs the Random Forest Regressor
+    4. Yields prediction results to 'bike-sharing-predictions'
     """
-    async for record in stream:
-        try:
-            # Build feature vector in the correct order
-            feature_vector = np.array([[record[f] for f in FEATURES]])
-            predicted_cnt  = float(MODEL.predict(feature_vector)[0])
+    async for event in stream:
+        # Deserialize if bytes
+        if isinstance(event, (bytes, bytearray)):
+            event = json.loads(event)
 
-            output = {
-                "row_id":         record.get("row_id", -1),
-                "actual_cnt":     record.get("cnt", None),
-                "predicted_cnt":  round(predicted_cnt, 1),
-                "input_features": {f: record[f] for f in FEATURES},
-            }
+        row_id     = event.get("row_id", "?")
+        cnt_actual = event.get("cnt", None)
 
-            await predictions_topic.send(value=output)
+        # Extract features and predict
+        X = extract_features(event)
+        if X is None:
+            continue
 
-        except KeyError as e:
-            print(f"⚠  Missing feature in record: {e}")
-        except Exception as e:
-            print(f"⚠  Prediction error: {e}")
+        cnt_predicted = float(round(MODEL.predict(X)[0], 1))
+
+        # Compute absolute error if actual value is available
+        error = round(abs(float(cnt_actual) - cnt_predicted), 1) if cnt_actual is not None else None
+
+        # Build prediction output message
+        result = {
+            "row_id":        row_id,
+            "cnt_measured":  int(cnt_actual) if cnt_actual is not None else None,
+            "cnt_predicted": cnt_predicted,
+            "error":         error,
+            "hour":          event.get("hr"),
+            "season":        event.get("season"),
+            "temp":          event.get("temp"),
+            "humidity_pct":  event.get("hum"),
+            "weathersit":    event.get("weathersit"),
+            "features_used": len(FEATURES),
+        }
+
+        yield json.dumps(result).encode("utf-8")
+
+
+if __name__ == "__main__":
+    app.main()

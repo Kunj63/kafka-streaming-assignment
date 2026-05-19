@@ -1,62 +1,118 @@
+# -*- coding: utf-8 -*-
 """
-producer.py
-Reads rows from data_sample.csv and publishes each one as a JSON message
-to the raw-data Kafka topic at ~1 row/second.
-
-Usage:
-    python producer.py
-
-Set KAFKA_BOOTSTRAP_SERVERS and (if using Confluent Cloud) auth env vars below.
+producer.py - Kafka Producer
+==============================
+Reads the Bike Sharing dataset and sends each row to Kafka at ~1 row/sec.
+Run with: python producer.py
 """
 
 import json
 import time
-import os
+import numpy as np
 import pandas as pd
 from kafka import KafkaProducer
+from kafka.errors import KafkaError
+from config import DATA_FILE, PRODUCER_DELAY, RAW_TOPIC, get_kafka_config
 
-# ── Config ────────────────────────────────────────────────────────────────────
-BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-TOPIC             = "raw-data"
-DELAY_SECONDS     = 1.0          # ~1 row/second for demo
+FEATURE_COLS = [
+    "season",
+    "yr",
+    "mnth",
+    "hr",
+    "holiday",
+    "weekday",
+    "workingday",
+    "weathersit",
+    "temp",
+    "atemp",
+    "hum",
+    "windspeed",
+]
 
-# Confluent Cloud / MSK / Aiven — set these env vars if needed:
-SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME", "")
-SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD", "")
 
-def make_producer():
-    kwargs = dict(
-        bootstrap_servers=BOOTSTRAP_SERVERS,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-        key_serializer=lambda k: str(k).encode("utf-8"),
-        acks="all",
-        retries=3,
-    )
-    if SASL_USERNAME:
-        kwargs.update(
-            security_protocol="SASL_SSL",
-            sasl_mechanism="PLAIN",
-            sasl_plain_username=SASL_USERNAME,
-            sasl_plain_password=SASL_PASSWORD,
-        )
-    return KafkaProducer(**kwargs)
+def load_data(path: str) -> pd.DataFrame:
+    """Load and clean the Bike Sharing dataset."""
+    df = pd.read_csv(path)
+    df.drop(columns=["instant", "dteday", "casual", "registered"], inplace=True, errors="ignore")
+    df.dropna(subset=["cnt"], inplace=True)
+    df = df[df["cnt"] > 0]
+    df.fillna(df.median(numeric_only=True), inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    return df
+
+
+def row_to_event(row: pd.Series, row_num: int) -> dict:
+    """Convert a DataFrame row to a Kafka event dict."""
+    event = {"row_id": row_num}
+
+    # Include target for consumer display
+    for col in ["cnt"]:
+        if col in row.index:
+            val = row[col]
+            event[col] = None if pd.isna(val) else int(val)
+
+    # Include all feature columns
+    for col in FEATURE_COLS:
+        if col in row.index:
+            val = row[col]
+            event[col] = None if (pd.isna(val) or val != val) else float(val)
+
+    return event
+
 
 def main():
-    df = pd.read_csv("model/data_sample.csv")
-    producer = make_producer()
-    print(f"🚀 Producer started — sending to topic '{TOPIC}' on {BOOTSTRAP_SERVERS}")
-    print(f"   Dataset rows: {len(df)}  |  Rate: 1 row/second\n")
+    print("=" * 55)
+    print("  Bike Sharing Kafka Producer")
+    print("=" * 55)
 
-    for idx, row in df.iterrows():
-        msg = row.to_dict()
-        msg["row_id"] = int(idx)
-        producer.send(TOPIC, key=str(idx), value=msg)
-        print(f"[{idx:>5}] Sent → {msg}")
-        time.sleep(DELAY_SECONDS)
+    df = load_data(DATA_FILE)
+    print(f"Loaded {len(df)} rows from {DATA_FILE}")
+    print(f"Broker : {get_kafka_config()['bootstrap_servers']}")
+    print(f"Topic  : {RAW_TOPIC}")
+    print(f"Delay  : {PRODUCER_DELAY}s per row")
+    print("-" * 55)
 
-    producer.flush()
-    producer.close()
-    print("\n✅ Producer finished.")
+    kafka_cfg = get_kafka_config()
+    producer = KafkaProducer(
+        bootstrap_servers=kafka_cfg["bootstrap_servers"],
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        **{k: v for k, v in kafka_cfg.items() if k != "bootstrap_servers"},
+    )
+
+    print("Connected to Kafka broker. Starting stream...\n")
+
+    sent = 0
+    try:
+        for idx, row in df.iterrows():
+            event  = row_to_event(row, idx)
+            future = producer.send(RAW_TOPIC, value=event)
+            try:
+                future.get(timeout=10)
+            except KafkaError as e:
+                print(f"Failed to send row {idx}: {e}")
+                continue
+
+            sent    += 1
+            cnt_val  = event.get("cnt", 0)
+            temp_val = event.get("temp", 0.0)
+            season   = int(event.get("season", 0))
+            hr       = int(event.get("hr", 0))
+
+            print(
+                f"Sent row {idx:>5} | "
+                f"Hr: {hr:>2}  Season: {season} | "
+                f"Actual Count: {cnt_val:>4} | "
+                f"Temp: {temp_val:.2f}"
+            )
+            time.sleep(PRODUCER_DELAY)
+
+    except KeyboardInterrupt:
+        print(f"\nProducer stopped by user. Sent {sent} messages.")
+    finally:
+        producer.flush()
+        producer.close()
+        print(f"Producer closed. Total sent: {sent}")
+
 
 if __name__ == "__main__":
     main()
