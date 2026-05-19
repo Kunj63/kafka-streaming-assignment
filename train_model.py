@@ -1,11 +1,3 @@
-"""
-train_model.py
-Run this ONCE before starting the pipeline to train and save the model.
-Uses the Bike Sharing (UCI) dataset - predicts hourly rental count (cnt).
-Dataset: https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset
-Download hour.csv from there and place it alongside this script.
-"""
-
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
@@ -14,9 +6,7 @@ import joblib
 import numpy as np
 import os
 
-CSV_PATH = "hour.csv"   # path to the UCI hour.csv
-
-# ── Fallback: generate synthetic data if CSV not downloaded yet ──────────────
+CSV_PATH = "hour.csv"   
 if not os.path.exists(CSV_PATH):
     print("⚠  hour.csv not found – generating synthetic data for demo purposes.")
     np.random.seed(42)
@@ -60,7 +50,7 @@ print(f"✅ Model trained — RMSE: {rmse:.2f}  |  R²: {r2:.4f}")
 joblib.dump(model, "model/bike_model.joblib")
 joblib.dump(FEATURES, "model/features.joblib")
 
-# Save a sample CSV for the producer to replay
+
 df[FEATURES + [TARGET]].to_csv("model/data_sample.csv", index=False)
 print("✅ Saved model/bike_model.joblib and model/data_sample.csv")
 print(f"   Accuracy (R²): {r2:.4f}   RMSE: {rmse:.2f}")
